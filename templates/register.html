@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>List of Orders</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .product-img {
+            max-width: 100px;
+            max-height: 100px;
+        }
+
+        .address {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .address-details {
+            margin-left: 10px;
+        }
+
+        .customer-details h2 {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 style="text-align: center;">List of Orders</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Customer ID</th>
+                <th>Customer Name</th>
+                <th>Address</th>
+                <th>Status</th>
+                <th>Payment Method</th>
+                <th>Shipping Courier</th>
+                <th>Ordered Date</th>
+                <th>Product Name</th>
+                <th>Product Image</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Total</th>
+                <th>Print</th>
+            </tr>
+        </thead>
+        <tbody id="orders-list"></tbody>
+    </table>
+
+    <script>
+        const consumerKey = 'ck_03aa52dfa64b8857d818fd920a75868327d9ba57';
+        const consumerSecret = 'cs_6501554ef90417ea4c552176073cbdd001ebd163';
+        let currentPage = 1;
+        let ordersUrl = `https://vaseegrahveda.com/wp-json/wc/v3/orders?consumer_key=${consumerKey}&consumer_secret=${consumerSecret}&per_page=100&page=${currentPage}`;
+
+        // Function to display orders
+        function displayOrders(orders) {
+            const ordersListTable = document.getElementById('orders-list');
+            orders.forEach(order => {
+                let totalPrice = 0; // Initialize total price for the order
+                let itemNumber = 1; // Initialize item number
+                order.line_items.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    if (index === 0) { // Show customer information and print button for the first item only
+                        row.innerHTML = `
+                            <td rowspan="${order.line_items.length}">${order.id}</td>
+                            <td rowspan="${order.line_items.length}">${order.customer_id}</td>
+                            <td rowspan="${order.line_items.length}">${order.billing.first_name} ${order.billing.last_name}</td>
+                            <td rowspan="${order.line_items.length}">${order.billing.address_1}</td>
+                            <td rowspan="${order.line_items.length}">${order.status}</td>
+                            <td rowspan="${order.line_items.length}">${order.payment_method_title}</td>
+                            <td rowspan="${order.line_items.length}">${order.shipping_lines[0].method_title}</td>
+                            <td rowspan="${order.line_items.length}">${order.date_created}</td>
+                            <td>${itemNumber}. ${item.name}</td>
+                            <td><img src="${item.image.src}" alt="${item.name}" class="product-img"></td>
+                            <td>${item.price}</td>
+                            <td>${item.quantity}</td>
+                            <td>${item.total}</td>
+                            <td rowspan="${order.line_items.length}"><button onclick="printOrder(${order.id})">Print</button></td>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <td>${itemNumber}. ${item.name}</td>
+                            <td><img src="${item.image.src}" alt="${item.name}" class="product-img"></td>
+                            <td>${item.price}</td>
+                            <td>${item.quantity}</td>
+                            <td>${item.total}</td>
+                        `;
+                    }
+                    ordersListTable.appendChild(row);
+                    totalPrice += parseFloat(item.total); // Add item total to the order's total price
+                    itemNumber++; // Increment item number
+                });
+
+                // Add a row for the order's total price
+                const totalRow = document.createElement('tr');
+                totalRow.innerHTML = `
+                    <td colspan="8"><strong>Total Price:</strong></td>
+                    <td colspan="5"><strong>${totalPrice.toFixed(2)}</strong></td>
+                `;
+                ordersListTable.appendChild(totalRow);
+            });
+        }
+
+        // Function to fetch orders from WooCommerce API
+        function fetchOrders() {
+            fetch(ordersUrl)
+                .then(response => {
+                    const totalPages = Number(response.headers.get('X-WP-TotalPages'));
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        ordersUrl = `https://vaseegrahveda.com/wp-json/wc/v3/orders?consumer_key=${consumerKey}&consumer_secret=${consumerSecret}&per_page=100&page=${currentPage}`;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Display the orders
+                    console.log(data)
+                    displayOrders(data);
+                    var dataArray = data;
+
+                    fetch('/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dataArray)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            console.log('Array data sent successfully.');
+                        } else {
+                            console.error('Failed to send array data.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+
+
+                })
+                .catch(error => {
+                    console.error('Error fetching orders:', error);
+                    alert('An error occurred while fetching orders. Please try again.');
+                });
+        }
+
+        // Function to print an order
+        function printOrder(orderId) {
+            // Fetch order details based on orderId
+            fetch(`https://vaseegrahveda.com/wp-json/wc/v3/orders/${orderId}?consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`)
+                .then(response => response.json())
+                .then(order => {
+                    // Create an element to hold the customer details
+                    const customerDetailsDiv = document.createElement('div');
+
+                    // Populate the customer details
+                    customerDetailsDiv.innerHTML = `
+
+    <div style="margin left:30px;" class="address">
+
+        <div>
+            <img src="logo.jfif" alt="Store Logo" style="max-width: 100px; max-height: 100px;margin-top:20px; margin-left:30px">
+        </div>
+        <div style="margin-left:400px;" class="address-details">
+            <p style="margin-top:30px;">No.7, Vaseegrah veda, Vijaya nagar Wahab Nagar, Post, near Srinivasapuram, Balaganapathy Nagar,Thanjavur, Tamil Nadu 613009</p>
+
+
+        </div>
+    </div>
+    <h1 style="text-align: center;">Invoice</h1>
+    <div style="margin-left:30px;" class="customer-details">
+
+        <h3>Bill To</h3>
+        <p><strong>Name:</strong> ${order.billing.first_name} ${order.billing.last_name}</p>
+        <p><strong>Address:</strong> ${order.billing.address_1}</p>
+        <h3>Ship To</h3>
+        <p><strong>Address:</strong> ${order.billing.address_1}</p>
+        <h2 style="margin-top:40px;">Customer Details</h2>
+        <table style="width:750px">
+            <tr>
+                <td><strong>Customer Name:</strong></td>
+                <td>${order.billing.first_name} ${order.billing.last_name}</td>
+            </tr>
+            <tr>
+                <td><strong>Customer Phone:</strong></td>
+                <td>${order.billing.phone}</td>
+            </tr>
+            <tr>
+                <td><strong>Ordered Date:</strong></td>
+                <td>${order.date_created}</td>
+            </tr>
+        </table>
+        <h2 style="margin-top:40px;">Ordered Items</h2>
+        <table style="width:750px">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${order.line_items.map(item => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.price}</td>
+                        <td>${item.quantity}</td>
+                        <td>${item.total}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <p style="margin-left:580px;"><strong>Total Price:</strong> ${order.total}</p>
+    </div>
+`;
+
+                    // Generate PDF from customer details
+                    html2pdf().from(customerDetailsDiv).save(`customer_details_order_${orderId}.pdf`, {
+                        html2canvas: {
+                            scale: 2,
+
+
+                            scrollX: 0,
+                            scrollY: 0
+                        },
+                        jsPDF: {
+                            unit: "in",
+                            format: "letter",
+                            orientation: 'portrait'
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching order details:', error);
+                    alert('An error occurred while fetching order details. Please try again.');
+                });
+        }
+
+        // Make a GET request to fetch orders
+        fetchOrders();
+
+    </script>
+</body>
+
+</html>
